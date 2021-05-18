@@ -4,17 +4,20 @@ import numpy as np
 import pickle
 import datetime
 from openpyxl import load_workbook
-face_locations = []
-webcam_source = cv2.VideoCapture(0)
-students_present = []
 
+face_locations = []
+camera_index = 0
+webcam_source = cv2.VideoCapture(camera_index)
+students_present = []
 original_number_of_faces = 0
 name_of_true_faces = ""
 face_locations_new = []
 amount_of_faces = 0
 original_encodings = 0
 unknown_face_encodings = []
-set_tolerance = 0.5
+colour_of_face = []
+set_tolerance = 0.6
+colour = ()
 # note, cv2 is BGR not RGB
 priorities = {"High": (0, 0, 255),
               "Medium": (0, 165, 255),
@@ -38,7 +41,18 @@ black_book.close()
 
 
 def check_webcam():
-    print("Check Webcam")
+    global camera_index
+    print("Please select the correct webcam feed.")
+    ret, frame_change = webcam_source.read()
+    cv2.imshow(f"Webcam: {camera_index}", frame_change)
+    cv2.waitKey(0)
+    camera_change = input("Press [Y] for the correct feed, or [N] for the next feed. ").lower()
+    if camera_change == 'y':
+        pass
+    elif camera_change == 'n':
+        camera_index = camera_index + 1
+    else:
+        print("The key pressed was not valid or incorrect, please retry.")
 
 
 def create_black_list():
@@ -78,33 +92,29 @@ def create_new_encoding():
 
 
 def compare_faces():
-    global name_of_true_faces, face_locations_new, unknown_face_encodings, amount_of_faces
+    global name_of_true_faces, face_locations_new, unknown_face_encodings, amount_of_faces, colour_of_face, colour
     amount_continue = False
     while not amount_continue:
         ret, frame2 = webcam_source.read()
         rubber_small_frame = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)
         face_locations_new = face_recognition.face_locations(rubber_small_frame, number_of_times_to_upsample=2)
-        print(face_locations_new)
         unknown_face_encodings = face_recognition.face_encodings(rubber_small_frame, face_locations_new)
         amount_encodings = len(unknown_face_encodings)
         if amount_encodings == amount_of_faces:
             amount_continue = True
-        else:
-            pass
     with open('grammar_database.dat', 'rb') as DataBaseOpened:
         grammar_face_encodings = pickle.load(DataBaseOpened)
     known_face_names = list(grammar_face_encodings.keys())
     known_face_encodings = np.array(list(grammar_face_encodings.values()))
-    face_number_index = -1
+    colour = (0, 0, 128)
     for faces in unknown_face_encodings:
-        face_number_index += 1
-        print(f'Current face index is {face_number_index}')
         check_faces = face_recognition.compare_faces(known_face_encodings, faces, tolerance=set_tolerance)
         # any() searches through the list of check_faces to find if there is a True boolean.
         if any(check_faces):
             # .Index gets the Index of the True variables
             get_index = check_faces.index(True)
             name_of_true_faces = known_face_names[get_index]
+            colour = (0, 128, 0)
             if name_of_true_faces in black_listed_students:
                 print(
                     f'Student {name_of_true_faces} is a Priority student, '
@@ -134,27 +144,12 @@ def compare_faces():
             print("An Unregistered user has been detected!\n"
                   "Please Adjust lighting and Re-Scan Face.")
             amount_of_faces -= 1
+        colour_of_face.append(colour)
 
 
 def video_feed_display():
-    global original_number_of_faces, original_encodings, amount_of_faces, face_locations
+    global original_number_of_faces, original_encodings, amount_of_faces, face_locations, colour
     video_loop = True
-    check_time = str(datetime.datetime.now().time())
-    check_time = check_time.split(":")
-    current_time = f'{(check_time[0])}:{(check_time[1])}'
-    for times in time_table:
-        roll = time_table[times].split("-")
-        start_time = ((int(roll[0][:2])) * 60) + (int(roll[0][-2:]))
-        end_time = ((int(roll[1][:2])) * 60) + (int(roll[1][-2:]))
-        current_time = ((int(check_time[0]) * 60) + (int(check_time[1])))
-        if (int(start_time)) <= (int(current_time)) <= (int(end_time)):
-            print(times)
-            break
-        # Check the hours of both create a new nested if to check if both minutes/hours of start are correct
-        # and another nested if minutes/hours are correct on the second time.
-    else:
-        print("It is not currently class time. If this is wrong, "
-              "please change the class times within settings.")
     while video_loop is True:
         ret, frame = webcam_source.read()
         small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
@@ -167,12 +162,12 @@ def video_feed_display():
         # Add a While loop until amount of face encodings match
         else:
             pass
-        for (top, right, bottom, left) in face_locations:
-            top *= 2
-            right *= 2
-            bottom *= 2
-            left *= 2
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 128, 0), 2)
+        for (x, y, w, h), colour in zip(face_locations, colour_of_face):
+            x *= 2
+            y *= 2
+            w *= 2
+            h *= 2
+            cv2.rectangle(frame, (h, x), (y, w), colour, 2)
         cv2.imshow("God's Eye", frame)
         cv2.waitKey(1)
     webcam_source.release()
@@ -201,8 +196,22 @@ while user_continue is False:
                        "a. Face Recognition\n"
                        "b. Create a new Face encoding\n"
                        "c. Create a new Black Listed student\n"
-                       "d. Settings.\n").lower()
+                       "d. Settings.\n"
+                       "e. Quit Program\n").lower()
     if user_input == 'a':
+        check_time = str(datetime.datetime.now().time())
+        check_time = check_time.split(":")
+        for times in time_table:
+            roll = time_table[times].split("-")
+            start_time = ((int(roll[0][:2])) * 60) + (int(roll[0][-2:]))
+            end_time = ((int(roll[1][:2])) * 60) + (int(roll[1][-2:]))
+            current_time = ((int(check_time[0]) * 60) + (int(check_time[1])))
+            if (int(start_time)) <= (int(current_time)) <= (int(end_time)):
+                print(times)
+                break
+        else:
+            print("It is not currently class time. If this is wrong, "
+                  "please change the class times within settings.")
         video_feed_display()
     elif user_input == 'b':
         create_new_encoding()
@@ -210,9 +219,9 @@ while user_continue is False:
         create_black_list()
     elif user_input == 'd':
         print(f"""Current Settings are:\n
-        Webcam:\n
-        Tolerance:\n
-        Timetable:\n""")
+        Webcam: System_Default \n
+        Tolerance: {set_tolerance} \n
+        Timetable: {time_table} \n""")
         correct_setting = False
         setting = input("Which setting would you like to change? or press [Q] to cancel. ").lower()
         if setting == 'webcam':
@@ -222,7 +231,7 @@ while user_continue is False:
             while change_tolerance_check is False:
                 change_tolerance = input("Press [R] to reset tolerance, or press [C] to change tolerance. ").lower()
                 if change_tolerance == 'r':
-                    set_tolerance = 0.5
+                    set_tolerance = 0.6
                 elif change_tolerance == 'c':
                     print("Suggested tolerances should be in a range of 0.4 - 0.7")
                     print("Before setting a full decimal change to tolerance e.g. 0.6 to 0.7,"
@@ -238,12 +247,41 @@ while user_continue is False:
                 else:
                     print("The value you entered wasn't correct")
         elif setting == 'timetable':
-            print("Timetable")
+            timetable_continue = False
+            while not timetable_continue:
+                change_timetable = input("Enter [C] to change timetable settings or [Q] to cancel. ").lower()
+                if change_timetable == 'c':
+                    new_change_timetable_continue = False
+                    while not new_change_timetable_continue:
+                        new_change_timetable = input("Enter [T] to change timetable times, "
+                                                     "or press [N] to create a new entry. ").lower()
+                        if new_change_timetable == 't':
+                            print("The current periods and respective times are:")
+                            for entries in time_table:
+                                print(f'{entries}: {time_table[entries]}')
+                            which_change = input("Which Period time would you like to change? ").upper()
+                            if which_change in time_table:
+                                time_changer_1 = input("Please enter the time at which the period starts e.g. 08:43: ")
+                                time_changer_2 = input("Please enter the time at which the period ends e.g. 09:20: ")
+                                time_table[which_change] = f'{time_changer_1}-{time_changer_2}'
+                                break
+                            else:
+                                print("That period is not currently in the timetable. Please re-enter.")
+                        elif new_change_timetable == 'n':
+                            print("Placeholder")
+                        else:
+                            print("The input you entered was incorrect, please retry.")
+                elif change_timetable == 'q':
+                    break
+                else:
+                    print("The input you entered was incorrect, please retry.")
         elif setting == 'q':
             correct_setting = True
         else:
             print("The value you entered did not match our settings, "
                   "please select either: timetable, webcam or tolerance. or press [Q] to go back to the main screen.")
+    elif user_input == 'e':
+        exit()
     else:
         print("Unfortunately the input entered did not match one of the available options. "
               "Please select again.")
