@@ -6,7 +6,7 @@ import datetime
 from openpyxl import load_workbook
 
 face_locations = []
-camera_index = 0
+camera_index = 1
 webcam_source = cv2.VideoCapture(camera_index)
 students_present = []
 original_number_of_faces = 0
@@ -23,21 +23,22 @@ priorities = {"High": (0, 0, 255),
               "Medium": (0, 165, 255),
               "Low": (0, 255, 255),
               }
+
 time_table = {"RC": "08:35-08:48",
               "P1": "08:48-09:51",
               "P2": "09:51-10:54",
               "P3": "11:13-12:16",
               "P4": "12:16-13:19",
               "P5": "13:57-15:00",
-              "P6": "17:57-20:01",
+              "P6": "17:57-24:01",
               }
-black_listed_students = {}
-
-black_book = load_workbook(filename="Attendance.xlsx")
-blacklist = black_book["Blacklist"]
-for i in blacklist.iter_rows(values_only=True):
-    black_listed_students.update({i[0]: i[1]})
-black_book.close()
+# black_listed_students = {}
+# This is the Black-List code -> will be implemented in version 2.0
+# black_book = load_workbook(filename="Attendance.xlsx")
+# blacklist = black_book["Blacklist"]
+# for i in blacklist.iter_rows(values_only=True):
+# black_listed_students.update({i[0]: i[1]})
+# black_book.close()
 
 
 def check_webcam():
@@ -115,13 +116,13 @@ def compare_faces():
             get_index = check_faces.index(True)
             name_of_true_faces = known_face_names[get_index]
             colour = (0, 128, 0)
-            if name_of_true_faces in black_listed_students:
-                print(
-                    f'Student {name_of_true_faces} is a Priority student, '
-                    f'with a {(black_listed_students[name_of_true_faces])} level of priority.')
+            # if name_of_true_faces in black_listed_students:
+            # print(
+            # f'Student {name_of_true_faces} is a Priority student,'
+            # f' with a {(black_listed_students[name_of_true_faces])} level of priority.')
             attendance_book = load_workbook(filename="Attendance.xlsx")
-            class_name = attendance_book[student_class]
-            date_time_tool = datetime.datetime.now().time()
+            class_name = attendance_book[new_student_class]
+            date_time_tool = str(datetime.datetime.now().time())
             date_time_tool = str(date_time_tool)
             new_times = date_time_tool.split(":")
             hours = new_times[0]
@@ -131,15 +132,24 @@ def compare_faces():
                 am_pm = "PM"
                 hours = int(hours) - 12
             count = 0
-            for names in class_name.iter_rows(values_only=True):
-                count += 1
-                if name_of_true_faces == names[0]:
-                    presence = (class_name[f'B{count}']).value
-                    if presence == "Absent":
-                        print(f'{name_of_true_faces} is in attendance')
-                        class_name[f'B{count}'] = "Present"
-                        class_name[f'C{count}'] = f'{hours}:{minutes} {am_pm}'
-            attendance_book.save(filename="Attendance.xlsx")
+            new_check_time = str(datetime.datetime.now().time())
+            new_check_time = new_check_time.split(":")
+            for new_times in time_table:
+                new_roll = time_table[new_times].split("-")
+                new_start_time = ((int(new_roll[0][:2])) * 60) + (int(new_roll[0][-2:]))
+                new_end_time = ((int(new_roll[1][:2])) * 60) + (int(new_roll[1][-2:]))
+                new_current_time = ((int(new_check_time[0]) * 60) + (int(new_check_time[1])))
+                if (int(new_start_time)) <= (int(new_current_time)) <= (int(new_end_time)):
+                    for names in class_name.iter_rows(values_only=True):
+                        count += 1
+                        if name_of_true_faces == names[0]:
+                            presence = (class_name[f'B{count}']).value
+                            if presence == "Absent":
+                                print(f'{name_of_true_faces} is in attendance')
+                                class_name[f'B{count}'] = f'Present in {new_times}'
+                                class_name[f'C{count}'] = f'{hours}:{minutes} {am_pm}'
+                                attendance_book.save(filename="Attendance.xlsx")
+                                break
         else:
             print("An Unregistered user has been detected!\n"
                   "Please Adjust lighting and Re-Scan Face.")
@@ -189,7 +199,18 @@ print("\n"
 print(
     "The God's Eye is a new form of Surveillance Technology, "
     "created for sole purpose of recording student attendance.")
-student_class = input("Please Enter Class e.g.'12SDD1: ")
+class_correct = False
+while not class_correct:
+    student_class = input("Please Enter Class e.g.'12SDD1: ").upper()
+    check_excel_exists = load_workbook(filename="Attendance.xlsx")
+    for number_of_sheets in check_excel_exists:
+        try:
+            var = check_excel_exists[student_class]
+            class_correct = True
+        except KeyError:
+            print("The Class you entered doesn't exist. Please try again.")
+    check_excel_exists.save(filename="Attendance.xlsx")
+
 user_continue = False
 while user_continue is False:
     user_input = input("To Continue to a section of the code please select one of the following options:\n"
@@ -212,6 +233,14 @@ while user_continue is False:
         else:
             print("It is not currently class time. If this is wrong, "
                   "please change the class times within settings.")
+        new_copy = load_workbook(filename="Attendance.xlsx")
+        sheet_to_copy = new_copy[student_class]
+        sheet_to_change_name = new_copy.copy_worksheet(sheet_to_copy)
+        check_date = str(datetime.datetime.now().date())
+        check_date = check_date.split("-")
+        new_student_class = f'{student_class}_{check_date[2]}.{check_date[1]}.{check_date[0]}'
+        sheet_to_change_name.title = new_student_class
+        new_copy.save(filename="Attendance.xlsx")
         video_feed_display()
     elif user_input == 'b':
         create_new_encoding()
