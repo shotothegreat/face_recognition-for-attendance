@@ -1,6 +1,6 @@
 import face_recognition
 import cv2
-import numpy as np
+import numpy
 import pickle
 import datetime
 from openpyxl import load_workbook
@@ -30,8 +30,7 @@ time_table = {"RC": "08:35-08:48",
               "P3": "11:13-12:16",
               "P4": "12:16-13:19",
               "P5": "13:57-15:00",
-              "P6": "17:57-24:01",
-              }
+              "P6": "17:57-24:01", }
 
 
 # black_listed_students = {}
@@ -41,22 +40,6 @@ time_table = {"RC": "08:35-08:48",
 # for i in blacklist.iter_rows(values_only=True):
 # black_listed_students.update({i[0]: i[1]})
 # black_book.close()
-
-
-def check_webcam():
-    global camera_index
-    print("Please select the correct webcam feed.")
-    ret, frame_change = webcam_source.read()
-    cv2.imshow(f"Webcam: {camera_index}", frame_change)
-    cv2.waitKey(0)
-    camera_change = input("Press [Y] for the correct feed, or [N] for the next feed. ").lower()
-    if camera_change == 'y':
-        pass
-    elif camera_change == 'n':
-        camera_index = camera_index + 1
-    else:
-        print("The key pressed was not valid or incorrect, please retry.")
-
 
 def create_black_list():
     correct = False
@@ -82,7 +65,7 @@ def create_black_list():
 with open('grammar_database.dat', 'rb') as DataBaseOpened:
     grammar_face_encodings = pickle.load(DataBaseOpened)
     known_face_names = list(grammar_face_encodings.keys())
-    known_face_encodings = np.array(list(grammar_face_encodings.values()))
+    known_face_encodings = numpy.array(list(grammar_face_encodings.values()))
 
 
 def create_new_encoding():
@@ -96,6 +79,55 @@ def create_new_encoding():
     with open("grammar_database.dat", "wb") as CreateNewEntryDatabase:
         pickle.dump(grammar_face_encodings, CreateNewEntryDatabase)
     print("New User Added")
+
+
+def backend_faster_recognition():
+    original_number_of_faces_2 = 0
+    face_recognition_loop = True
+    while face_recognition_loop is True:
+        ret, frame = webcam_source.read()
+        small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+        rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        face_locations_2 = face_recognition.face_locations(rgb_frame, number_of_times_to_upsample=2)
+        amount_of_faces_2 = len(face_locations_2)
+        if amount_of_faces_2 != original_number_of_faces_2 and amount_of_faces_2 > 0:
+            original_number_of_faces_2 = amount_of_faces_2
+            unknown_face_encodings_2 = face_recognition.face_encodings(rgb_frame, face_locations_2)
+            for faces in unknown_face_encodings_2:
+                check_faces = face_recognition.compare_faces(known_face_encodings, faces)
+                if any(check_faces):
+                    get_index = check_faces.index(True)
+                    name_of_true_faces_2 = known_face_names[get_index]
+                    attendance_book = load_workbook(filename="Attendance.xlsx")
+                    class_name = attendance_book[new_student_class]
+                    date_time_tool = str(datetime.datetime.now().time())
+                    date_time_tool = str(date_time_tool)
+                    new_times = date_time_tool.split(":")
+                    hours = new_times[0]
+                    minutes = new_times[1]
+                    am_pm = "AM"
+                    if int(hours) > 12:
+                        am_pm = "PM"
+                        hours = int(hours) - 12
+                    count = 0
+                    new_check_time = str(datetime.datetime.now().time())
+                    new_check_time = new_check_time.split(":")
+                    for new_times in time_table:
+                        new_roll = time_table[new_times].split("-")
+                        new_start_time = ((int(new_roll[0][:2])) * 60) + (int(new_roll[0][-2:]))
+                        new_end_time = ((int(new_roll[1][:2])) * 60) + (int(new_roll[1][-2:]))
+                        new_current_time = ((int(new_check_time[0]) * 60) + (int(new_check_time[1])))
+                        if (int(new_start_time)) <= (int(new_current_time)) <= (int(new_end_time)):
+                            for names in class_name.iter_rows(values_only=True):
+                                count += 1
+                                if name_of_true_faces_2 == names[0]:
+                                    presence = (class_name[f'B{count}']).value
+                                    if presence == "Absent":
+                                        print(f'{name_of_true_faces_2} is present.')
+                                        class_name[f'B{count}'] = f'Present in {new_times}'
+                                        class_name[f'C{count}'] = f'{hours}:{minutes} {am_pm}'
+                                        attendance_book.save(filename="Attendance.xlsx")
+                                        break
 
 
 def compare_faces():
@@ -222,6 +254,14 @@ while user_continue is False:
                        "d. Settings.\n"
                        "e. Quit Program\n").lower()
     if user_input == 'a':
+        with open("Settings.txt", "r+") as settings_file:
+            lines = settings_file.readlines()
+            for line in lines:
+                new_line = line.split("|")
+                if new_line[0] == "webcam":
+                    camera_index = (int(new_line[1]))
+                elif new_line[0] == "tolerance":
+                    set_tolerance = float((new_line[1]))
         check_time = str(datetime.datetime.now().time())
         check_time = check_time.split(":")
         for times in time_table:
@@ -230,7 +270,7 @@ while user_continue is False:
             end_time = ((int(roll[1][:2])) * 60) + (int(roll[1][-2:]))
             current_time = ((int(check_time[0]) * 60) + (int(check_time[1])))
             if (int(start_time)) <= (int(current_time)) <= (int(end_time)):
-                print(times)
+                print(f"It is currently: {times}")
                 break
         else:
             print("It is not currently class time. If this is wrong, "
@@ -243,7 +283,16 @@ while user_continue is False:
         new_student_class = f'{student_class}_{check_date[2]}.{check_date[1]}.{check_date[0]}'
         sheet_to_change_name.title = new_student_class
         new_copy.save(filename="Attendance.xlsx")
-        video_feed_display()
+        user_choice = False
+        while user_choice is False:
+            which_option_of_recognition = input("Press [A] for live video feed, "
+                                                "or press [B] for Non-Visual-Display version ").lower()
+            if which_option_of_recognition == 'a':
+                video_feed_display()
+            elif which_option_of_recognition == 'b':
+                backend_faster_recognition()
+            else:
+                print("The button you entered did not match one of the options, please try again.")
     elif user_input == 'b':
         create_new_encoding()
     elif user_input == 'c':
@@ -251,13 +300,32 @@ while user_continue is False:
         # create_black_list()
     elif user_input == 'd':
         print(f"""Current Settings are:\n
-        Webcam: System_Default \n
+        Webcam: System_Default_Camera: {camera_index} \n
         Tolerance: {set_tolerance} \n
         Timetable: {time_table} \n""")
         correct_setting = False
         setting = input("Which setting would you like to change? or press [Q] to cancel. ").lower()
         if setting == 'webcam':
-            check_webcam()
+            change_cam = input("Press [C] to change the Camera, or [R] to reset the camera. ").lower()
+            if change_cam == 'c':
+                print("Changing the Camera to the next available camera...")
+                camera_index += 1
+            elif change_cam == 'r':
+                print("Resetting Camera index to System Default...")
+                camera_index = 0
+            else:
+                print("Invalid input, please try again later.")
+            with open("Settings.txt", "r+") as settings_file_2:
+                lines_2 = settings_file_2.readlines()
+                for line_2 in lines_2:
+                    new_line_2 = line_2.split("|")
+                    if new_line_2[0] == "tolerance":
+                        var2_2 = line_2
+                var3_2 = f'webcam|{camera_index}'
+                new_file_information_2 = "\n" + var2_2 + "\n" + var3_2
+                settings_file_2.truncate(0)
+                settings_file_2.write(new_file_information_2)
+                print(f"Camera has been successfully set to System_Default No.{camera_index}")
         elif setting == 'tolerance':
             change_tolerance_check = False
             while change_tolerance_check is False:
@@ -275,38 +343,48 @@ while user_continue is False:
                         print("Try again.")
                     else:
                         set_tolerance = new_tolerance
-                        change_tolerance_check = True
-                else:
-                    print("The value you entered wasn't correct")
-        elif setting == 'timetable':
-            timetable_continue = False
-            while not timetable_continue:
-                change_timetable = input("Enter [C] to change timetable settings or [Q] to cancel. ").lower()
-                if change_timetable == 'c':
-                    new_change_timetable_continue = False
-                    while not new_change_timetable_continue:
-                        new_change_timetable = input("Enter [T] to change timetable times, "
-                                                     "or press [N] to create a new entry. ").lower()
-                        if new_change_timetable == 't':
-                            print("The current periods and respective times are:")
-                            for entries in time_table:
-                                print(f'{entries}: {time_table[entries]}')
-                            which_change = input("Which Period time would you like to change? ").upper()
-                            if which_change in time_table:
-                                time_changer_1 = input("Please enter the time at which the period starts e.g. 08:43: ")
-                                time_changer_2 = input("Please enter the time at which the period ends e.g. 09:20: ")
-                                time_table[which_change] = f'{time_changer_1}-{time_changer_2}'
-                                break
-                            else:
-                                print("That period is not currently in the timetable. Please re-enter.")
-                        elif new_change_timetable == 'n':
-                            print("Placeholder")
-                        else:
-                            print("The input you entered was incorrect, please retry.")
-                elif change_timetable == 'q':
+                with open("Settings.txt", "r+") as settings_file_1:
+                    lines_1 = settings_file_1.readlines()
+                    for line_1 in lines_1:
+                        new_line_1 = line_1.split("|")
+                        if new_line_1[0] == "webcam":
+                            var1 = line_1
+                    var3 = f'tolerance|{set_tolerance}'
+                    new_file_information = "\n" + var1 + "\n" + var3
+                    settings_file_1.truncate(0)
+                    settings_file_1.write(new_file_information)
+                    print(f"Tolerance has been successfully set to: {set_tolerance}")
                     break
-                else:
-                    print("The input you entered was incorrect, please retry.")
+        elif setting == 'timetable':
+            print("Unfortunately in this version of the code, the timetable is not editable.")
+            # timetable_continue = False
+            # while not timetable_continue:
+            # change_timetable = input("Enter [C] to change timetable settings or [Q] to cancel. ").lower()
+            # if change_timetable == 'c':
+            # new_change_timetable_continue = False
+            # while not new_change_timetable_continue:
+            # new_change_timetable = input("Enter [T] to change timetable times, "
+            # "or press [N] to create a new entry. ").lower()
+            # if new_change_timetable == 't':
+            # print("The current periods and respective times are:")
+            # for entries in time_table:
+            #  print(f'{entries}: {time_table[entries]}')
+            # which_change = input("Which Period time would you like to change? ").upper()
+            # if which_change in time_table:
+            #  time_changer_1 = input("Please enter the time at which the period starts e.g. 08:43: ")
+            # time_changer_2 = input("Please enter the time at which the period ends e.g. 09:20: ")
+            # time_table[which_change] = f'{time_changer_1}-{time_changer_2}'
+            # break
+            # else:
+            # print("That period is not currently in the timetable. Please re-enter.")
+            # elif new_change_timetable == 'n':
+            # print("Placeholder")
+            # else:
+            # print("The input you entered was incorrect, please retry.")
+            # elif change_timetable == 'q':
+            #   break
+            #  else:
+            # print("The input you entered was incorrect, please retry.")
         elif setting == 'q':
             correct_setting = True
         else:
