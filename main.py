@@ -6,7 +6,7 @@ import datetime
 from openpyxl import load_workbook
 
 face_locations = []
-camera_index = 1
+camera_index = 0
 webcam_source = cv2.VideoCapture(camera_index)
 students_present = []
 original_number_of_faces = 0
@@ -32,6 +32,8 @@ time_table = {"RC": "08:35-08:48",
               "P5": "13:57-15:00",
               "P6": "17:57-24:01",
               }
+
+
 # black_listed_students = {}
 # This is the Black-List code -> will be implemented in version 2.0
 # black_book = load_workbook(filename="Attendance.xlsx")
@@ -77,14 +79,18 @@ def create_black_list():
             # Needs to keep scanning until a face is found
 
 
+with open('grammar_database.dat', 'rb') as DataBaseOpened:
+    grammar_face_encodings = pickle.load(DataBaseOpened)
+    known_face_names = list(grammar_face_encodings.keys())
+    known_face_encodings = np.array(list(grammar_face_encodings.values()))
+
+
 def create_new_encoding():
-    with open('grammar_database.dat', 'rb') as CreateNewEntryDatabase:
-        grammar_face_encodings = pickle.load(CreateNewEntryDatabase)
     print("Note: Only .JPG file extensions should be used.")
     image_name = input("Please enter the image name: ")
     image_path = f'known_faces/class/{image_name}.JPG'
     new_image = face_recognition.load_image_file(image_path)
-    print("Generating New User Information...")
+    print("Generating New User Information (Approximately 1-3 minutes)...")
     print("Please Wait...")
     grammar_face_encodings[image_name] = face_recognition.face_encodings(new_image, num_jitters=100)[0]
     with open("grammar_database.dat", "wb") as CreateNewEntryDatabase:
@@ -103,10 +109,6 @@ def compare_faces():
         amount_encodings = len(unknown_face_encodings)
         if amount_encodings == amount_of_faces:
             amount_continue = True
-    with open('grammar_database.dat', 'rb') as DataBaseOpened:
-        grammar_face_encodings = pickle.load(DataBaseOpened)
-    known_face_names = list(grammar_face_encodings.keys())
-    known_face_encodings = np.array(list(grammar_face_encodings.values()))
     colour = (0, 0, 128)
     for faces in unknown_face_encodings:
         check_faces = face_recognition.compare_faces(known_face_encodings, faces, tolerance=set_tolerance)
@@ -245,7 +247,8 @@ while user_continue is False:
     elif user_input == 'b':
         create_new_encoding()
     elif user_input == 'c':
-        create_black_list()
+        print("Unfortunately, this option is not available in the current version of God's Eye.")
+        # create_black_list()
     elif user_input == 'd':
         print(f"""Current Settings are:\n
         Webcam: System_Default \n
